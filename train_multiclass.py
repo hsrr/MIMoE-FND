@@ -9,14 +9,18 @@
   4: 时间不一致
   5: 无效视觉信息
 
+评估指标:
+  - 二分类 (真新闻 vs 假新闻): ACC, Macro-F1
+  - 六分类: ACC, Macro-F1, per-class precision/recall/F1
+
 用法示例:
   python train_multiclass.py \
     -train_file /map-vepfs/liniuniu/hesirui/datasets/train.jsonl \
-    -test_file /map-vepfs/liniuniu/hesirui/datasets/test.jsonl \
+    -val_file /map-vepfs/liniuniu/hesirui/datasets/val.jsonl \
     -image_root /map-vepfs/liniuniu/hesirui/datasets/images \
     -device cuda:0 \
     -batch_size 16 \
-    -epochs 50
+    -epochs 100
 """
 
 import os
@@ -118,9 +122,9 @@ def main(args):
         label_field=args.label_field,
     )
 
-    if args.test_file and os.path.exists(args.test_file):
+    if args.val_file and os.path.exists(args.val_file):
         validate_dataset = MultiClassDataset(
-            ann_file=args.test_file,
+            ann_file=args.val_file,
             root_dir=args.image_root,
             image_size=GT_size,
             is_train=False,
@@ -129,7 +133,7 @@ def main(args):
             label_field=args.label_field,
         )
     else:
-        print("No separate test file, splitting 90/10 from training data")
+        print("No separate val file, splitting 90/10 from training data")
         total = len(train_dataset)
         val_size = int(total * 0.1)
         train_size = total - val_size
@@ -236,6 +240,7 @@ def main(args):
     best_val_acc = 0.0
     best_epoch = 0
     best_report = ""
+    best_metrics = {"binary_acc": 0, "binary_f1": 0, "multi_acc": 0, "multi_f1": 0}
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -317,31 +322,39 @@ def main(args):
             )
 
         # ====================== Validation ======================
-        val_acc, val_report, val_f1 = evaluate(
+        metrics, val_report = evaluate(
             validate_loader, model, criterion, args.device
         )
-        print(f"\nEpoch [{epoch+1}/{args.epochs}] Val_Acc: {val_acc:.4f}, Val_F1_macro: {val_f1:.4f}")
+        print(f"\nEpoch [{epoch+1}/{args.epochs}]")
         print(val_report)
 
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        val_multi_acc = metrics["multi_acc"]
+        if val_multi_acc > best_val_acc:
+            best_val_acc = val_multi_acc
             best_epoch = epoch + 1
             best_report = val_report
+            best_metrics = metrics
             ckpt_path = os.path.join(
                 args.output_dir,
-                f"best_ep{epoch+1}_{datetime.datetime.now().strftime('%m%d')}_{int(val_acc*100)}.pkl",
+                f"best_ep{epoch+1}_{datetime.datetime.now().strftime('%m%d')}_{int(val_multi_acc*100)}.pkl",
             )
             torch.save(model.state_dict(), ckpt_path)
             print(f"Best model saved to {ckpt_path}")
 
-        print(f"Best so far: Acc={best_val_acc:.4f} at Epoch {best_epoch}")
+        print(
+            f"Best so far (Epoch {best_epoch}): "
+            f"Binary ACC={best_metrics['binary_acc']:.4f} F1={best_metrics['binary_f1']:.4f} | "
+            f"Multi ACC={best_metrics['multi_acc']:.4f} F1={best_metrics['multi_f1']:.4f}"
+        )
 
         if args.val_only:
             break
 
     with open(os.path.join(args.output_dir, "results.log"), "a") as f:
         f.write(f"==================== {datetime.datetime.now()} ====================\n")
-        f.write(f"best_val_acc: {best_val_acc:.4f}, best_epoch: {best_epoch}\n")
+        f.write(f"best_epoch: {best_epoch}\n")
+        f.write(f"Binary ACC: {best_metrics['binary_acc']:.4f}  Macro-F1: {best_metrics['binary_f1']:.4f}\n")
+        f.write(f"Multi  ACC: {best_metrics['multi_acc']:.4f}  Macro-F1: {best_metrics['multi_f1']:.4f}\n")
         f.write(f"{best_report}\n")
         f.write(f"args: {args}\n\n")
 
@@ -378,23 +391,50 @@ def evaluate(loader, model, criterion, device):
     all_preds = np.array(all_preds)
     all_labels = np.array(all_labels)
 
-    acc = accuracy_score(all_labels, all_preds)
-    f1_macro = f1_score(all_labels, all_preds, average="macro", zero_division=0)
+    # ---- 六分类指标 ----
+    multi_acc = accuracy_score(all_labels, all_preds)
+    multi_f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
     target_names = [LABEL_NAMES[i] for i in range(NUM_CLASSES)]
-    report = classification_report(
+    multi_report = classification_report(
         all_labels, all_preds, target_names=target_names, digits=4, zero_division=0
     )
 
+    # ---- 二分类指标 (0=真新闻, 1-5=假新闻) ----
+    binary_labels = (all_labels > 0).astype(int)
+    binary_preds = (all_preds > 0).astype(int)
+    binary_acc = accuracy_score(binary_labels, binary_preds)
+    binary_f1 = f1_score(binary_labels, binary_preds, average="macro", zero_division=0)
+    binary_report = classification_report(
+        binary_labels, binary_preds,
+        target_names=["真新闻", "假新闻"], digits=4, zero_division=0
+    )
+
+    report = (
+        "========== 二分类指标 (真新闻 vs 假新闻) ==========\n"
+        f"Binary ACC: {binary_acc:.4f}    Binary Macro-F1: {binary_f1:.4f}\n"
+        f"{binary_report}\n"
+        "========== 六分类指标 ==========\n"
+        f"Multi ACC:  {multi_acc:.4f}    Multi Macro-F1:  {multi_f1:.4f}\n"
+        f"{multi_report}"
+    )
+
+    metrics = {
+        "binary_acc": binary_acc,
+        "binary_f1": binary_f1,
+        "multi_acc": multi_acc,
+        "multi_f1": multi_f1,
+    }
+
     model.train()
-    return acc, report, f1_macro
+    return metrics, report
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ViMoE V2 六分类训练")
     parser.add_argument("-train_file", type=str,
                         default="/map-vepfs/liniuniu/hesirui/datasets/train.jsonl")
-    parser.add_argument("-test_file", type=str, default="",
-                        help="测试集 JSONL 路径，为空则从训练集切分 10%%")
+    parser.add_argument("-val_file", type=str, default="",
+                        help="验证集 JSONL 路径，为空则从训练集切分 10%%")
     parser.add_argument("-image_root", type=str,
                         default="/map-vepfs/liniuniu/hesirui/datasets/images",
                         help="图片根目录")
@@ -405,7 +445,7 @@ if __name__ == "__main__":
                         help="预训练权重路径（可加载二分类权重，strict=False）")
     parser.add_argument("-device", type=str, default="cuda:0")
     parser.add_argument("-batch_size", type=int, default=16)
-    parser.add_argument("-epochs", type=int, default=50)
+    parser.add_argument("-epochs", type=int, default=100)
     parser.add_argument("-finetune", type=int, default=0,
                         help="是否微调 BERT 和 MAE 编码器")
     parser.add_argument("-val_only", action="store_true",
