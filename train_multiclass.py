@@ -198,7 +198,16 @@ def main(args):
 
     if args.checkpoint and os.path.exists(args.checkpoint):
         print(f"Loading checkpoint: {args.checkpoint}")
-        load_model(model, args.checkpoint, strict=False)
+        ckpt = torch.load(args.checkpoint, map_location="cpu")
+        model_state = model.state_dict()
+        filtered = {
+            k: v for k, v in ckpt.items()
+            if k in model_state and v.shape == model_state[k].shape
+        }
+        skipped = [k for k in ckpt if k not in filtered]
+        if skipped:
+            print(f"Skipped {len(skipped)} keys: {skipped}")
+        model.load_state_dict(filtered, strict=False)
 
     model = model.to(args.device)
     model.train()

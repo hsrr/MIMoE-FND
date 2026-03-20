@@ -203,7 +203,16 @@ def main(args):
         f"Checkpoint not found: {args.checkpoint}"
     print(f"Loading checkpoint: {args.checkpoint}")
     state_dict = torch.load(args.checkpoint, map_location="cpu")
-    model.load_state_dict(state_dict, strict=False)
+    # positional buffers 在 forward 中按实际 batch_size 重新计算，跳过 shape 不匹配的
+    model_state = model.state_dict()
+    filtered = {
+        k: v for k, v in state_dict.items()
+        if k in model_state and v.shape == model_state[k].shape
+    }
+    skipped = [k for k in state_dict if k not in filtered]
+    if skipped:
+        print(f"Skipped {len(skipped)} keys due to shape mismatch: {skipped}")
+    model.load_state_dict(filtered, strict=False)
 
     model = model.to(args.device)
     metrics = evaluate(test_loader, model, args.device)
