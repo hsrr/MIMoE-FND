@@ -202,6 +202,7 @@ class Vimoe_V2(nn.Module):
         agr_threshold=0.3,
         sem_threshold=0.3,
         warmup_epochs=0,
+        num_classes=2,
     ):
         self.projection_only = False
         self.thresh = thresh
@@ -214,8 +215,14 @@ class Vimoe_V2(nn.Module):
         print("we are using adaIN")
 
         self.unified_dim, self.text_dim = 768, 768
-        self.is_use_bce = is_use_bce
-        out_dim = 1 if self.is_use_bce else 2
+        self.num_classes = num_classes
+        if num_classes > 2:
+            self.is_use_bce = False
+            out_dim = num_classes
+        else:
+            self.is_use_bce = is_use_bce
+            out_dim = 1 if self.is_use_bce else 2
+        self.out_dim = out_dim
         self.num_expert = 2  # 2
         self.depth = 1  # 2
         super(Vimoe_V2, self).__init__()
@@ -231,10 +238,12 @@ class Vimoe_V2(nn.Module):
         self.image_model.load_state_dict(checkpoint["model"], strict=False)
 
         english_lists = ["gossip", "Twitter", "politi"]
+        self.english_lists = english_lists
+        self.is_chinese = self.dataset not in english_lists
         self.warmup_epochs = warmup_epochs
         model_name = (
             "bert-base-chinese"
-            if self.dataset not in english_lists
+            if self.is_chinese
             else "bert-base-uncased"
         )
         print("BERT: using {}".format(model_name))
@@ -243,7 +252,7 @@ class Vimoe_V2(nn.Module):
         # CLIP MODEL
         self.clip = (
             ChineseCLIPModel.from_pretrained("OFA-Sys/chinese-clip-vit-base-patch16")
-            if self.dataset not in english_lists
+            if self.is_chinese
             else CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
         )
 
@@ -267,7 +276,7 @@ class Vimoe_V2(nn.Module):
         self.register_buffer('positional_modal_representation', torch.zeros(self.batch_size, 3, self.unified_dim))
 
         clip_embed_dim = 512
-        clip_hidden_dim = 128 if self.dataset in english_lists else 256
+        clip_hidden_dim = 128 if not self.is_chinese else 256
 
         # --- hidden size 128 for gossipcop
         self.m_i_projection = nn.Sequential(
@@ -362,28 +371,25 @@ class Vimoe_V2(nn.Module):
         )
 
         #### mapping MLPs
+        mapping_in = out_dim
         self.mapping_IS_MLP_mu = nn.Sequential(
-            nn.Linear(1, self.unified_dim),
+            nn.Linear(mapping_in, self.unified_dim),
             nn.SiLU(),
-            # nn.BatchNorm1d(self.unified_dim),
             nn.Linear(self.unified_dim, 1),
         )
         self.mapping_IS_MLP_sigma = nn.Sequential(
-            nn.Linear(1, self.unified_dim),
+            nn.Linear(mapping_in, self.unified_dim),
             nn.SiLU(),
-            # nn.BatchNorm1d(self.unified_dim),
             nn.Linear(self.unified_dim, 1),
         )
         self.mapping_T_MLP_mu = nn.Sequential(
-            nn.Linear(1, self.unified_dim),
+            nn.Linear(mapping_in, self.unified_dim),
             nn.SiLU(),
-            # nn.BatchNorm1d(self.unified_dim),
             nn.Linear(self.unified_dim, 1),
         )
         self.mapping_T_MLP_sigma = nn.Sequential(
-            nn.Linear(1, self.unified_dim),
+            nn.Linear(mapping_in, self.unified_dim),
             nn.SiLU(),
-            # nn.BatchNorm1d(self.unified_dim),
             nn.Linear(self.unified_dim, 1),
         )
         self.adaIN = AdaIN()
@@ -460,7 +466,7 @@ class Vimoe_V2(nn.Module):
                 token_type_ids=token_type_ids,
             )[0]
 
-        if self.dataset in ["weibo", "weibo21"]:
+        if self.is_chinese:
             m_i = self.clip.get_image_features(**clip_inputs)
             m_t = self.clip.get_text_features(
                 input_ids=input_ids,
@@ -545,17 +551,17 @@ class Vimoe_V2(nn.Module):
         )
 
         ## WEIGHTED MULTIMODAL FEATURES
-        is_mu = self.mapping_IS_MLP_mu(
-            torch.sigmoid(image_only_output).clone().detach()
-        )
-        is_sigma = self.mapping_IS_MLP_sigma(
-            torch.sigmoid(image_only_output).clone().detach()
-        )
+        if self.is_use_bce:
+            img_score = torch.sigmoid(image_only_output).clone().detach()
+            txt_score = torch.sigmoid(text_only_output).clone().detach()
+        else:
+            img_score = torch.softmax(image_only_output, dim=-1).clone().detach()
+            txt_score = torch.softmax(text_only_output, dim=-1).clone().detach()
 
-        t_mu = self.mapping_T_MLP_mu(torch.sigmoid(text_only_output).clone().detach())
-        t_sigma = self.mapping_T_MLP_sigma(
-            torch.sigmoid(text_only_output).clone().detach()
-        )
+        is_mu = self.mapping_IS_MLP_mu(img_score)
+        is_sigma = self.mapping_IS_MLP_sigma(img_score)
+        t_mu = self.mapping_T_MLP_mu(txt_score)
+        t_sigma = self.mapping_T_MLP_sigma(txt_score)
 
         shared_image_feature = self.adaIN(
             shared_image_feature, is_mu, is_sigma
