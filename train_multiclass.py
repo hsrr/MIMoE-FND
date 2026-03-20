@@ -35,7 +35,7 @@ import torch.nn as nn
 from sklearn.metrics import classification_report, accuracy_score, f1_score
 from torch.autograd import Variable
 from torch.utils.data import DataLoader, random_split
-from transformers import BertTokenizer, ChineseCLIPImageProcessor
+from transformers import BertTokenizer
 import pytorch_warmup as warmup
 
 from util import Progbar
@@ -47,7 +47,31 @@ GT_size = 224
 word_token_length = 197
 image_token_length = 197
 token_chinese = BertTokenizer.from_pretrained("bert-base-chinese")
-clip_chinese_processor = ChineseCLIPImageProcessor(do_rescale=False, do_resize=False)
+
+
+class SimpleImageBatch:
+    """替代 ChineseCLIPImageProcessor (do_rescale=False, do_resize=False)，
+    只做 stack 成 pixel_values。"""
+    def __init__(self, pixel_values):
+        self.pixel_values = pixel_values
+        self.data = {"pixel_values": pixel_values}
+
+    def to(self, device):
+        self.pixel_values = self.pixel_values.to(device)
+        self.data = {"pixel_values": self.pixel_values}
+        return self
+
+    def keys(self):
+        return self.data.keys()
+
+    def __getitem__(self, key):
+        return self.data[key]
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def items(self):
+        return self.data.items()
 
 stateful_metrics = [
     "CE_loss", "Int_loss", "mean_acc", "lr",
@@ -76,9 +100,7 @@ def collate_fn_chinese(data):
         return_tensors="pt",
         return_length=True,
     )
-    clip_img_inputs = clip_chinese_processor.preprocess(
-        images=image, return_tensors="pt"
-    )
+    clip_img_inputs = SimpleImageBatch(torch.stack(image))
 
     input_ids = token_data["input_ids"]
     attention_mask = token_data["attention_mask"]
