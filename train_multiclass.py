@@ -15,9 +15,10 @@
 
 用法示例:
   python train_multiclass.py \
-    -train_file /map-vepfs/liniuniu/hesirui/datasets/train.jsonl \
-    -val_file /map-vepfs/liniuniu/hesirui/datasets/val.jsonl \
-    -image_root /map-vepfs/liniuniu/hesirui/datasets/images \
+    -train_file /data1/hsiri/AMG/datasets/trianDBthinkGeminiCOT3_260107.jsonl \
+    -val_file /data1/hsiri/AMG/datasets/val.json \
+    -train_image_root /data1/hsiri/AMG/datasets/AMG_MEDIA/train_imagesN \
+    -val_image_root /data1/hsiri/AMG/datasets/AMG_MEDIA/val_imagesN \
     -device cuda:0 \
     -batch_size 16 \
     -epochs 100
@@ -114,16 +115,17 @@ def main(args):
     # ====================== Data ======================
     train_dataset = MultiClassDataset(
         ann_file=args.train_file,
-        root_dir=args.image_root,
+        root_dir=args.train_image_root,
         image_size=GT_size,
         is_train=True,
         max_words=args.max_words,
     )
 
+    val_image_root = args.val_image_root if args.val_image_root else args.train_image_root
     if args.val_file and os.path.exists(args.val_file):
         validate_dataset = MultiClassDataset(
             ann_file=args.val_file,
-            root_dir=args.image_root,
+            root_dir=val_image_root,
             image_size=GT_size,
             is_train=False,
             max_words=args.max_words,
@@ -426,12 +428,16 @@ def evaluate(loader, model, criterion, device):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="ViMoE V2 六分类训练")
     parser.add_argument("-train_file", type=str,
-                        default="/map-vepfs/liniuniu/hesirui/datasets/train.jsonl")
-    parser.add_argument("-val_file", type=str, default="",
+                        default="/data1/hsiri/AMG/datasets/trianDBthinkGeminiCOT3_260107.jsonl")
+    parser.add_argument("-val_file", type=str,
+                        default="/data1/hsiri/AMG/datasets/val.json",
                         help="验证集 JSONL 路径，为空则从训练集切分 10%%")
-    parser.add_argument("-image_root", type=str,
-                        default="/map-vepfs/liniuniu/hesirui/datasets/images",
-                        help="图片根目录")
+    parser.add_argument("-train_image_root", type=str,
+                        default="/data1/hsiri/AMG/datasets/AMG_MEDIA/train_imagesN",
+                        help="训练集图片根目录")
+    parser.add_argument("-val_image_root", type=str,
+                        default="/data1/hsiri/AMG/datasets/AMG_MEDIA/val_imagesN",
+                        help="验证集图片根目录，为空则与训练集相同")
     parser.add_argument("-dataset_name", type=str, default="multiclass",
                         help="数据集名称，非英文数据集会使用中文 BERT/CLIP")
     parser.add_argument("-output_dir", type=str, default="./checkpoints/multiclass")
