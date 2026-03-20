@@ -33,7 +33,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 from sklearn.metrics import classification_report, accuracy_score, f1_score
-from torch.autograd import Variable
 from torch.utils.data import DataLoader, random_split
 from transformers import BertTokenizer, CLIPProcessor
 import pytorch_warmup as warmup
@@ -56,10 +55,8 @@ stateful_metrics = [
 ]
 
 
-def to_var(x):
-    if torch.cuda.is_available():
-        x = x.cuda()
-    return Variable(x)
+def to_device(x, device):
+    return x.to(device)
 
 
 def collate_fn_english(data):
@@ -288,12 +285,12 @@ def main(args):
                 input_ids, attention_mask, token_type_ids = texts
                 image, image_aug, labels, category, sents = others
 
-                input_ids = to_var(input_ids)
-                attention_mask = to_var(attention_mask)
-                token_type_ids = to_var(token_type_ids)
-                image = to_var(image)
-                image_aug = to_var(image_aug)
-                labels = to_var(labels)
+                input_ids = to_device(input_ids, args.device)
+                attention_mask = to_device(attention_mask, args.device)
+                token_type_ids = to_device(token_type_ids, args.device)
+                image = to_device(image, args.device)
+                image_aug = to_device(image_aug, args.device)
+                labels = to_device(labels, args.device)
                 clip_inputs = clip_inputs.to(args.device)
 
                 mix_output, image_only_output, text_only_output, loss_int = model(
@@ -397,11 +394,11 @@ def evaluate(loader, model, criterion, device):
             input_ids, attention_mask, token_type_ids = texts
             image, image_aug, labels, category, sents = others
 
-            input_ids = to_var(input_ids)
-            attention_mask = to_var(attention_mask)
-            token_type_ids = to_var(token_type_ids)
-            image = to_var(image)
-            labels = to_var(labels)
+            input_ids = to_device(input_ids, device)
+            attention_mask = to_device(attention_mask, device)
+            token_type_ids = to_device(token_type_ids, device)
+            image = to_device(image, device)
+            labels = to_device(labels, device)
             clip_inputs = clip_inputs.to(device)
 
             mix_output, image_only_output, text_only_output, loss_int = model(
