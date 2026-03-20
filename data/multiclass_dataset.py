@@ -15,21 +15,12 @@ import data.util as util
 
 NUM_CLASSES = 6
 
-LABEL_TO_ID = {
-    "真新闻": 0,
-    "图片伪造": 1,
-    "实体不一致": 2,
-    "事件不一致": 3,
-    "时间不一致": 4,
-    "无效视觉信息": 5,
-}
-
 
 class MultiClassDataset(data.Dataset):
     """六分类虚假新闻检测数据集，读取 JSONL 格式。
 
     JSONL 每行示例:
-        {"Id": "xxx", "content": "新闻文本...", "label": "真新闻"}
+        {"Id": "1", "content": "...", "label": "0", "create_time": ...}
 
     图片路径: {root_dir}/{Id}.png
     """
@@ -78,9 +69,8 @@ class MultiClassDataset(data.Dataset):
 
         class_counts = [0] * NUM_CLASSES
         for item in self.ann:
-            label = item["class"]
-            if 0 <= label < NUM_CLASSES:
-                class_counts[label] += 1
+            if 0 <= item["label"] < NUM_CLASSES:
+                class_counts[item["label"]] += 1
         total = sum(class_counts)
         print(f"Class distribution: {dict(enumerate(class_counts))}")
 
@@ -96,18 +86,11 @@ class MultiClassDataset(data.Dataset):
         caption = ann["content"]
         caption = re.sub(r"\s{2,}", " ", caption)
         if len(caption) > self.max_words:
-            processed["text"] = "".join(caption[: self.max_words])
+            processed["text"] = caption[: self.max_words]
         else:
             processed["text"] = caption
 
-        label_str = ann["label"]
-        processed["class"] = LABEL_TO_ID.get(label_str, -1)
-        if processed["class"] == -1:
-            try:
-                processed["class"] = int(label_str)
-            except ValueError:
-                raise ValueError(f"Unknown label: {label_str}")
-
+        processed["label"] = int(ann["label"])
         return processed
 
     def __len__(self):
@@ -119,7 +102,7 @@ class MultiClassDataset(data.Dataset):
             item = self.ann[index]
             sample_id = str(item["Id"])
             content = item["text"]
-            label = item["class"]
+            label = item["label"]
 
             img_path = os.path.join(self.root_dir, sample_id + self.image_ext)
 
