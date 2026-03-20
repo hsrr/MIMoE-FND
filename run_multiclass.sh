@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export TOKENIZERS_PARALLELISM=false
+
 python train_multiclass.py \
     -train_file /data1/hsiri/AMG/datasets/trianDBthinkGeminiCOT3_260107.jsonl \
     -val_file /data1/hsiri/AMG/datasets/val.json \
@@ -11,7 +13,7 @@ python train_multiclass.py \
     -mae_path /map-vepfs/liniuniu/hesirui/mae_pretrain_vit_base.pth \
     -device cuda:0 \
     -batch_size 16 \
-    -epochs 100 \
+    -epochs 50 \
     -finetune 0 \
     -int_lr 1e-4 \
     -int_beta 0.7 \
