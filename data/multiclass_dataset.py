@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import random
 import copy
 
@@ -14,12 +15,21 @@ import data.util as util
 
 NUM_CLASSES = 6
 
+LABEL_TO_ID = {
+    "真新闻": 0,
+    "图片伪造": 1,
+    "实体不一致": 2,
+    "事件不一致": 3,
+    "时间不一致": 4,
+    "无效视觉信息": 5,
+}
+
 
 class MultiClassDataset(data.Dataset):
     """六分类虚假新闻检测数据集，读取 JSONL 格式。
 
     JSONL 每行示例:
-        {"Id": "xxx", "text": "...", "label": 0}
+        {"Id": "xxx", "content": "新闻文本...", "label": "真新闻"}
 
     图片路径: {root_dir}/{Id}.png
     """
@@ -30,18 +40,14 @@ class MultiClassDataset(data.Dataset):
         root_dir,
         image_size=224,
         is_train=True,
-        id_field="Id",
-        text_field="text",
-        label_field="label",
+        max_words=512,
         image_ext=".png",
     ):
         super(MultiClassDataset, self).__init__()
         self.root_dir = root_dir
         self.is_train = is_train
         self.image_size = image_size
-        self.id_field = id_field
-        self.text_field = text_field
-        self.label_field = label_field
+        self.max_words = max_words
         self.image_ext = image_ext
         self.not_valid_set = set()
 
@@ -66,13 +72,13 @@ class MultiClassDataset(data.Dataset):
             for line in f:
                 if line.strip():
                     item = json.loads(line)
-                    self.ann.append(item)
+                    self.ann.append(self._preprocess_annotation(item))
 
         print(f"Loaded {len(self.ann)} samples from {ann_file}")
 
         class_counts = [0] * NUM_CLASSES
         for item in self.ann:
-            label = int(item[self.label_field])
+            label = item["class"]
             if 0 <= label < NUM_CLASSES:
                 class_counts[label] += 1
         total = sum(class_counts)
@@ -83,6 +89,27 @@ class MultiClassDataset(data.Dataset):
         )
         self.class_weights = self.class_weights / self.class_weights.sum() * NUM_CLASSES
 
+    def _preprocess_annotation(self, ann):
+        processed = {}
+        processed["Id"] = ann["Id"]
+
+        caption = ann["content"]
+        caption = re.sub(r"\s{2,}", " ", caption)
+        if len(caption) > self.max_words:
+            processed["text"] = "".join(caption[: self.max_words])
+        else:
+            processed["text"] = caption
+
+        label_str = ann["label"]
+        processed["class"] = LABEL_TO_ID.get(label_str, -1)
+        if processed["class"] == -1:
+            try:
+                processed["class"] = int(label_str)
+            except ValueError:
+                raise ValueError(f"Unknown label: {label_str}")
+
+        return processed
+
     def __len__(self):
         return len(self.ann)
 
@@ -90,9 +117,9 @@ class MultiClassDataset(data.Dataset):
         find_path = False
         while not find_path:
             item = self.ann[index]
-            sample_id = str(item[self.id_field])
-            content = str(item[self.text_field])
-            label = int(item[self.label_field])
+            sample_id = str(item["Id"])
+            content = item["text"]
+            label = item["class"]
 
             img_path = os.path.join(self.root_dir, sample_id + self.image_ext)
 

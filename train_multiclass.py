@@ -117,9 +117,7 @@ def main(args):
         root_dir=args.image_root,
         image_size=GT_size,
         is_train=True,
-        id_field=args.id_field,
-        text_field=args.text_field,
-        label_field=args.label_field,
+        max_words=args.max_words,
     )
 
     if args.val_file and os.path.exists(args.val_file):
@@ -128,9 +126,7 @@ def main(args):
             root_dir=args.image_root,
             image_size=GT_size,
             is_train=False,
-            id_field=args.id_field,
-            text_field=args.text_field,
-            label_field=args.label_field,
+            max_words=args.max_words,
         )
     else:
         print("No separate val file, splitting 90/10 from training data")
@@ -452,11 +448,7 @@ if __name__ == "__main__":
     parser.add_argument("-int_beta", type=float, default=0.7)
     parser.add_argument("-agr_threshold", type=float, default=0.3)
     parser.add_argument("-sem_threshold", type=float, default=0.3)
-    parser.add_argument("-id_field", type=str, default="Id",
-                        help="JSONL 中图片 ID 字段名")
-    parser.add_argument("-text_field", type=str, default="text",
-                        help="JSONL 中文本字段名")
-    parser.add_argument("-label_field", type=str, default="label",
-                        help="JSONL 中标签字段名")
+    parser.add_argument("-max_words", type=int, default=512,
+                        help="文本最大字数截断")
     args = parser.parse_args()
     main(args)
