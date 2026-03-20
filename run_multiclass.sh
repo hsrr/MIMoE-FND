@@ -5,6 +5,7 @@ python train_multiclass.py \
     -val_file /data1/hsiri/AMG/datasets/val.json \
     -train_image_root /data1/hsiri/AMG/datasets/AMG_MEDIA/train_imagesN \
     -val_image_root /data1/hsiri/AMG/datasets/AMG_MEDIA/val_imagesN \
+    -dataset_name Twitter \
     -device cuda:0 \
     -batch_size 16 \
     -epochs 100 \

@@ -35,7 +35,7 @@ import torch.nn as nn
 from sklearn.metrics import classification_report, accuracy_score, f1_score
 from torch.autograd import Variable
 from torch.utils.data import DataLoader, random_split
-from transformers import BertTokenizer
+from transformers import BertTokenizer, CLIPProcessor
 import pytorch_warmup as warmup
 
 from util import Progbar
@@ -46,32 +46,10 @@ from data.multiclass_dataset import MultiClassDataset, NUM_CLASSES
 GT_size = 224
 word_token_length = 197
 image_token_length = 197
-token_chinese = BertTokenizer.from_pretrained("bert-base-chinese")
+ENGLISH_DATASETS = ["gossip", "Twitter", "politi", "english"]
 
-
-class SimpleImageBatch:
-    """替代 ChineseCLIPImageProcessor (do_rescale=False, do_resize=False)，
-    只做 stack 成 pixel_values。"""
-    def __init__(self, pixel_values):
-        self.pixel_values = pixel_values
-        self.data = {"pixel_values": pixel_values}
-
-    def to(self, device):
-        self.pixel_values = self.pixel_values.to(device)
-        self.data = {"pixel_values": self.pixel_values}
-        return self
-
-    def keys(self):
-        return self.data.keys()
-
-    def __getitem__(self, key):
-        return self.data[key]
-
-    def __iter__(self):
-        return iter(self.data)
-
-    def items(self):
-        return self.data.items()
+token_uncased = BertTokenizer.from_pretrained("bert-base-uncased")
+clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
 
 stateful_metrics = [
     "CE_loss", "Int_loss", "mean_acc", "lr",
@@ -84,7 +62,7 @@ def to_var(x):
     return Variable(x)
 
 
-def collate_fn_chinese(data):
+def collate_fn_english(data):
     sents = [i[0][0] for i in data]
     image = [i[0][1] for i in data]
     image_aug = [i[0][2] for i in data]
@@ -92,7 +70,7 @@ def collate_fn_chinese(data):
     category = [0 for i in data]
     GT_path = [i[1] for i in data]
 
-    token_data = token_chinese.batch_encode_plus(
+    token_data = token_uncased.batch_encode_plus(
         batch_text_or_text_pairs=sents,
         truncation=True,
         padding="max_length",
@@ -100,7 +78,15 @@ def collate_fn_chinese(data):
         return_tensors="pt",
         return_length=True,
     )
-    clip_img_inputs = SimpleImageBatch(torch.stack(image))
+    clip_inputs = clip_processor(
+        text=sents,
+        images=image,
+        truncation=True,
+        padding="max_length",
+        max_length=77,
+        return_tensors="pt",
+        return_length=True,
+    )
 
     input_ids = token_data["input_ids"]
     attention_mask = token_data["attention_mask"]
@@ -114,7 +100,7 @@ def collate_fn_chinese(data):
     return (
         (input_ids, attention_mask, token_type_ids),
         (image, image_aug, labels, category, sents),
-        clip_img_inputs,
+        clip_inputs,
         GT_path,
     )
 
@@ -163,11 +149,14 @@ def main(args):
             generator=torch.Generator().manual_seed(seed),
         )
 
+    collate_fn = collate_fn_english
+    print(f"Using English collate (bert-base-uncased + openai/clip)")
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
-        collate_fn=collate_fn_chinese,
+        collate_fn=collate_fn,
         num_workers=4,
         drop_last=True,
         pin_memory=True,
@@ -176,7 +165,7 @@ def main(args):
         validate_dataset,
         batch_size=args.batch_size,
         shuffle=False,
-        collate_fn=collate_fn_chinese,
+        collate_fn=collate_fn,
         num_workers=4,
         drop_last=False,
         pin_memory=True,
@@ -460,8 +449,8 @@ if __name__ == "__main__":
     parser.add_argument("-val_image_root", type=str,
                         default="/data1/hsiri/AMG/datasets/AMG_MEDIA/val_imagesN",
                         help="验证集图片根目录，为空则与训练集相同")
-    parser.add_argument("-dataset_name", type=str, default="multiclass",
-                        help="数据集名称，非英文数据集会使用中文 BERT/CLIP")
+    parser.add_argument("-dataset_name", type=str, default="Twitter",
+                        help="英文数据用 Twitter/gossip/politi，中文数据用其他名称")
     parser.add_argument("-output_dir", type=str, default="./checkpoints/multiclass")
     parser.add_argument("-checkpoint", type=str, default="",
                         help="预训练权重路径（可加载二分类权重，strict=False）")
