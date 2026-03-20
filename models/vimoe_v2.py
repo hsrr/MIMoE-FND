@@ -202,6 +202,9 @@ class Vimoe_V2(nn.Module):
         sem_threshold=0.3,
         warmup_epochs=0,
         num_classes=2,
+        bert_path=None,
+        clip_path=None,
+        mae_path=None,
     ):
         self.projection_only = False
         self.thresh = thresh
@@ -231,28 +234,32 @@ class Vimoe_V2(nn.Module):
         self.image_model = models_mae.__dict__[
             "mae_vit_{}_patch16".format(self.model_size)
         ](norm_pix_loss=False)
-        checkpoint = torch.load(
-            "./mae_pretrain_vit_{}.pth".format(self.model_size), map_location="cpu"
-        )
+        _mae_path = mae_path or "./mae_pretrain_vit_{}.pth".format(self.model_size)
+        checkpoint = torch.load(_mae_path, map_location="cpu")
         self.image_model.load_state_dict(checkpoint["model"], strict=False)
+        print("MAE: loaded from {}".format(_mae_path))
 
         english_lists = ["gossip", "Twitter", "politi"]
         self.english_lists = english_lists
         self.is_chinese = self.dataset not in english_lists
         self.warmup_epochs = warmup_epochs
-        model_name = (
-            "bert-base-chinese"
-            if self.is_chinese
-            else "bert-base-uncased"
-        )
-        print("BERT: using {}".format(model_name))
-        self.text_model = BertModel.from_pretrained(model_name)
+        if bert_path:
+            _bert_path = bert_path
+        else:
+            _bert_path = "bert-base-chinese" if self.is_chinese else "bert-base-uncased"
+        print("BERT: using {}".format(_bert_path))
+        self.text_model = BertModel.from_pretrained(_bert_path)
 
         # CLIP MODEL
+        if clip_path:
+            _clip_path = clip_path
+        else:
+            _clip_path = "OFA-Sys/chinese-clip-vit-base-patch16" if self.is_chinese else "openai/clip-vit-base-patch16"
+        print("CLIP: using {}".format(_clip_path))
         self.clip = (
-            ChineseCLIPModel.from_pretrained("OFA-Sys/chinese-clip-vit-base-patch16")
+            ChineseCLIPModel.from_pretrained(_clip_path)
             if self.is_chinese
-            else CLIPModel.from_pretrained("openai/clip-vit-base-patch16")
+            else CLIPModel.from_pretrained(_clip_path)
         )
 
         self.text_attention = TokenAttention(self.unified_dim)

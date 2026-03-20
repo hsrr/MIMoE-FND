@@ -6,6 +6,9 @@ python train_multiclass.py \
     -train_image_root /data1/hsiri/AMG/datasets/AMG_MEDIA/train_imagesN \
     -val_image_root /data1/hsiri/AMG/datasets/AMG_MEDIA/val_imagesN \
     -dataset_name Twitter \
+    -bert_path /map-vepfs/liniuniu/hesirui/bert-base-uncased \
+    -clip_path /map-vepfs/liniuniu/hesirui/clip-vit-base-patch16 \
+    -mae_path /map-vepfs/liniuniu/hesirui/mae_pretrain_vit_base.pth \
     -device cuda:0 \
     -batch_size 16 \
     -epochs 100 \

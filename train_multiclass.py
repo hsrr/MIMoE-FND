@@ -46,10 +46,10 @@ from data.multiclass_dataset import MultiClassDataset, NUM_CLASSES
 GT_size = 224
 word_token_length = 197
 image_token_length = 197
-ENGLISH_DATASETS = ["gossip", "Twitter", "politi", "english"]
 
-token_uncased = BertTokenizer.from_pretrained("bert-base-uncased")
-clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch16")
+# 延迟初始化，等 args 解析后再加载
+token_uncased = None
+clip_processor = None
 
 stateful_metrics = [
     "CE_loss", "Int_loss", "mean_acc", "lr",
@@ -120,6 +120,13 @@ def main(args):
     torch.backends.cudnn.deterministic = False
     torch.backends.cudnn.benchmark = True
 
+    # ====================== Init tokenizers from local paths ======================
+    global token_uncased, clip_processor
+    token_uncased = BertTokenizer.from_pretrained(args.bert_path)
+    clip_processor = CLIPProcessor.from_pretrained(args.clip_path)
+    print(f"BertTokenizer: {args.bert_path}")
+    print(f"CLIPProcessor: {args.clip_path}")
+
     # ====================== Data ======================
     train_dataset = MultiClassDataset(
         ann_file=args.train_file,
@@ -184,6 +191,9 @@ def main(args):
         sem_threshold=args.sem_threshold,
         warmup_epochs=0,
         num_classes=NUM_CLASSES,
+        bert_path=args.bert_path,
+        clip_path=args.clip_path,
+        mae_path=args.mae_path,
     )
 
     if args.checkpoint and os.path.exists(args.checkpoint):
@@ -467,5 +477,11 @@ if __name__ == "__main__":
     parser.add_argument("-sem_threshold", type=float, default=0.3)
     parser.add_argument("-max_words", type=int, default=512,
                         help="文本最大字数截断")
+    parser.add_argument("-bert_path", type=str,
+                        default="/map-vepfs/liniuniu/hesirui/bert-base-uncased")
+    parser.add_argument("-clip_path", type=str,
+                        default="/map-vepfs/liniuniu/hesirui/clip-vit-base-patch16")
+    parser.add_argument("-mae_path", type=str,
+                        default="/map-vepfs/liniuniu/hesirui/mae_pretrain_vit_base.pth")
     args = parser.parse_args()
     main(args)
