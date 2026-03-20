@@ -205,7 +205,8 @@ class Vimoe_V2(nn.Module):
         self.projection_only = False
         self.thresh = thresh
         self.batch_size = batch_size
-        self.text_token_len, self.image_token_len = text_token_len, image_token_len
+        self.text_token_len = int(text_token_len)
+        self.image_token_len = int(image_token_len)
         model_size = "base"
         self.model_size = model_size
         self.dataset = dataset
