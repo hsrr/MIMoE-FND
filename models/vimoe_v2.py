@@ -1,11 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import BertModel, BertTokenizer
-from transformers import (
-    ChineseCLIPModel,
-    CLIPModel,
-)
+from transformers import BertModel, BertTokenizer, CLIPModel
 
 import models_mae
 import pickle as pickle
@@ -256,11 +252,7 @@ class Vimoe_V2(nn.Module):
         else:
             _clip_path = "OFA-Sys/chinese-clip-vit-base-patch16" if self.is_chinese else "openai/clip-vit-base-patch16"
         print("CLIP: using {}".format(_clip_path))
-        self.clip = (
-            ChineseCLIPModel.from_pretrained(_clip_path)
-            if self.is_chinese
-            else CLIPModel.from_pretrained(_clip_path)
-        )
+        self.clip = CLIPModel.from_pretrained(_clip_path)
 
         self.text_attention = TokenAttention(self.unified_dim)
         self.image_attention = TokenAttention(self.unified_dim)
