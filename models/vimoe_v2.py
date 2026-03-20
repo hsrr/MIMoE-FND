@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import BertModel, BertTokenizer
-import clip
 from transformers import (
     ChineseCLIPModel,
     CLIPModel,
