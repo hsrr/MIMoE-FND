@@ -182,15 +182,15 @@ def main(args):
     print(f"Building ViMoE V2 model with {NUM_CLASSES} classes")
     model = Vimoe_V2(
         dataset=args.dataset_name,
-        text_token_len=word_token_length,
-        image_token_len=image_token_length,
+        text_token_len=197,
+        image_token_len=197,
         is_use_bce=False,
         batch_size=args.batch_size,
         thresh=0.5,
         agr_threshold=args.agr_threshold,
         sem_threshold=args.sem_threshold,
         warmup_epochs=0,
-        num_classes=NUM_CLASSES,
+        num_classes=6,
         bert_path=args.bert_path,
         clip_path=args.clip_path,
         mae_path=args.mae_path,
