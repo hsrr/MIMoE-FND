@@ -39,7 +39,7 @@ import pytorch_warmup as warmup
 
 from util import Progbar
 from models.vimoe_v2 import Vimoe_V2
-from data.multiclass_dataset import MultiClassDataset, LABEL_NAMES, NUM_CLASSES
+from data.multiclass_dataset import MultiClassDataset, NUM_CLASSES
 
 # constants
 GT_size = 224
@@ -394,9 +394,8 @@ def evaluate(loader, model, criterion, device):
     # ---- 六分类指标 ----
     multi_acc = accuracy_score(all_labels, all_preds)
     multi_f1 = f1_score(all_labels, all_preds, average="macro", zero_division=0)
-    target_names = [LABEL_NAMES[i] for i in range(NUM_CLASSES)]
     multi_report = classification_report(
-        all_labels, all_preds, target_names=target_names, digits=4, zero_division=0
+        all_labels, all_preds, digits=4, zero_division=0
     )
 
     # ---- 二分类指标 (0=真新闻, 1-5=假新闻) ----
@@ -405,8 +404,7 @@ def evaluate(loader, model, criterion, device):
     binary_acc = accuracy_score(binary_labels, binary_preds)
     binary_f1 = f1_score(binary_labels, binary_preds, average="macro", zero_division=0)
     binary_report = classification_report(
-        binary_labels, binary_preds,
-        target_names=["真新闻", "假新闻"], digits=4, zero_division=0
+        binary_labels, binary_preds, digits=4, zero_division=0
     )
 
     report = (

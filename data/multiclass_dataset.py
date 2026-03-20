@@ -12,15 +12,7 @@ from PIL import Image
 
 import data.util as util
 
-LABEL_NAMES = {
-    0: "真新闻",
-    1: "图片伪造",
-    2: "实体不一致",
-    3: "事件不一致",
-    4: "时间不一致",
-    5: "无效视觉信息",
-}
-NUM_CLASSES = len(LABEL_NAMES)
+NUM_CLASSES = 6
 
 
 class MultiClassDataset(data.Dataset):
@@ -84,7 +76,7 @@ class MultiClassDataset(data.Dataset):
             if 0 <= label < NUM_CLASSES:
                 class_counts[label] += 1
         total = sum(class_counts)
-        print(f"Class distribution: {dict(zip(LABEL_NAMES.values(), class_counts))}")
+        print(f"Class distribution: {dict(enumerate(class_counts))}")
 
         self.class_weights = torch.tensor(
             [total / max(c, 1) for c in class_counts], dtype=torch.float32
