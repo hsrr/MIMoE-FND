@@ -438,16 +438,17 @@ class Vimoe_V2(nn.Module):
         x_mm = torch.rand(
             batch_size, self.image_token_len + self.text_token_len, self.unified_dim
         )
-        self.positional_mm = p_1d_mm(x_mm).cuda()
+        _device = image.device
+        self.positional_mm = p_1d_mm(x_mm).to(_device)
         p_1d_image = PositionalEncoding1D(self.unified_dim)
         x_image = torch.rand(batch_size, self.image_token_len, self.unified_dim)
-        self.positional_image = p_1d_image(x_image).cuda()
+        self.positional_image = p_1d_image(x_image).to(_device)
         p_1d_text = PositionalEncoding1D(self.unified_dim)
         x_text = torch.rand(batch_size, self.text_token_len, self.unified_dim)
-        self.positional_text = p_1d_text(x_text).cuda()
+        self.positional_text = p_1d_text(x_text).to(_device)
         p_1d = PositionalEncoding1D(self.unified_dim)
         x = torch.rand(batch_size, 3, self.unified_dim)
-        self.positional_modal_representation = p_1d(x).cuda()
+        self.positional_modal_representation = p_1d(x).to(_device)
 
         # BASE FEATURE AND ATTENTION
         # IMAGE MAE:  OUTPUT IS (BATCH, 197, 768)
