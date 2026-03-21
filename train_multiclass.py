@@ -277,7 +277,10 @@ def main(args):
         if args.val_only:
             pass
         else:
-            total = len(train_dataset)
+            if train_loader.drop_last:
+                total = len(train_loader) * args.batch_size
+            else:
+                total = len(train_dataset)
             progbar = Progbar(total, width=10, stateful_metrics=stateful_metrics)
 
             for i, items in enumerate(train_loader):
@@ -313,8 +316,10 @@ def main(args):
                 optimizer_extremefast.zero_grad()
                 loss.backward()
                 nn.utils.clip_grad_norm_(model.parameters(), max_norm=1)
+                encoder_stepped = False
                 if epoch >= 10 and finetune_encoders:
                     optimizer.step()
+                    encoder_stepped = True
                 optimizer_fast.step()
                 optimizer_extremefast.step()
 
@@ -333,7 +338,7 @@ def main(args):
                 ]
                 progbar.add(len(image), values=logs)
 
-                if finetune_encoders:
+                if finetune_encoders and encoder_stepped:
                     with warmup_scheduler.dampening():
                         scheduler.step()
                 with warmup_scheduler_fast.dampening():

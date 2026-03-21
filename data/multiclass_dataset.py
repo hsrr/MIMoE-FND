@@ -35,6 +35,14 @@ class MultiClassDataset(data.Dataset):
         image_ext=".png",
     ):
         super(MultiClassDataset, self).__init__()
+        if not os.path.isfile(ann_file):
+            raise FileNotFoundError(f"Annotation file not found: {ann_file}")
+        if not os.path.isdir(root_dir):
+            raise FileNotFoundError(
+                f"Image root directory not found: {root_dir}. "
+                "Please check -train_image_root/-val_image_root path."
+            )
+
         self.root_dir = root_dir
         self.is_train = is_train
         self.image_size = image_size
@@ -64,6 +72,8 @@ class MultiClassDataset(data.Dataset):
                 if line.strip():
                     item = json.loads(line)
                     self.ann.append(self._preprocess_annotation(item))
+        if not self.ann:
+            raise ValueError(f"No valid samples found in annotation file: {ann_file}")
 
         print(f"Loaded {len(self.ann)} samples from {ann_file}")
 
@@ -97,8 +107,8 @@ class MultiClassDataset(data.Dataset):
         return len(self.ann)
 
     def __getitem__(self, index):
-        find_path = False
-        while not find_path:
+        max_trials = min(max(len(self.ann), 1), 2000)
+        for _ in range(max_trials):
             item = self.ann[index]
             sample_id = str(item["Id"])
             content = item["text"]
@@ -111,6 +121,7 @@ class MultiClassDataset(data.Dataset):
                 continue
 
             if not os.path.exists(img_path):
+                self.not_valid_set.add(img_path)
                 index = random.randint(0, len(self.ann) - 1)
                 continue
 
@@ -141,7 +152,12 @@ class MultiClassDataset(data.Dataset):
                 img_GT = img_GT[:, :, :3]
 
             img_GT = util.channel_convert(img_GT.shape[2], "RGB", [img_GT])[0]
-            find_path = True
+            break
+        else:
+            raise RuntimeError(
+                "Failed to load a valid image after many retries. "
+                f"Please check annotation IDs and image_root path: {self.root_dir}"
+            )
 
         if self.is_train:
             img_GT_aug = self.transform_aug(image=copy.deepcopy(img_GT))["image"]
