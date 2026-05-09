@@ -487,19 +487,22 @@ class VimoeAblation(nn.Module):
                 token_type_ids=token_type_ids,
             )[0]
 
-        if self.dataset in ["weibo", "weibo21"]:
-            m_i = self.clip.get_image_features(**clip_inputs)
-            m_t = self.clip.get_text_features(
-                input_ids=input_ids,
-                attention_mask=attention_mask,
-                token_type_ids=token_type_ids,
-            )
+        # Route CLIP inputs by field instead of dataset name. This avoids
+        # passing text keys into get_image_features when a non-Chinese dataset
+        # name is paired with an OpenAI-style CLIP checkpoint (or vice versa).
+        image_kwargs = {}
+        if "pixel_values" in clip_inputs:
+            image_kwargs["pixel_values"] = clip_inputs["pixel_values"]
         else:
-            m_i = self.clip.get_image_features(clip_inputs["pixel_values"])
-            m_t = self.clip.get_text_features(
-                input_ids=clip_inputs["input_ids"],
-                attention_mask=clip_inputs["attention_mask"],
-            )
+            raise KeyError("clip_inputs must contain 'pixel_values' for CLIP image features.")
+
+        text_kwargs = {}
+        for key in ("input_ids", "attention_mask", "token_type_ids", "position_ids"):
+            if key in clip_inputs:
+                text_kwargs[key] = clip_inputs[key]
+
+        m_i = self.clip.get_image_features(**image_kwargs)
+        m_t = self.clip.get_text_features(**text_kwargs)
 
         # print("text_feature size {}".format(text_feature.shape)) # 64,170,768
         # print("image_feature size {}".format(image_feature.shape)) # 64,197,1024
